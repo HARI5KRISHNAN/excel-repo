@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@google/genai": "^1.27.0",
+    "@stomp/stompjs": "^7.0.0",
     "axios": "^1.6.2",
     "hot-formula-parser": "^4.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "sockjs-client": "^1.6.1",
     "use-undo": "^1.1.1",
     "xlsx": "^0.18.5"
   },
