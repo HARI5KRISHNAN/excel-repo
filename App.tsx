@@ -5,10 +5,13 @@ import { Spreadsheet } from './components/Spreadsheet';
 import { AIPanel } from './components/AIPanel';
 import { FormulaBar } from './components/FormulaBar';
 import { Toolbar } from './components/Toolbar';
+import { FileMenu } from './components/FileMenu';
+import { VersionHistoryModal } from './components/VersionHistoryModal';
 import { SheetData, SelectionArea, Merge, CellData, CellFormat } from './types';
 import { generateData } from './services/ollamaService';
 import { getNormalizedSelection, findMergeForCell, evaluateFormula } from './utils';
 import { useTheme } from './contexts/ThemeContext';
+import { versionHistory } from './services/versionHistory';
 
 
 const INITIAL_ROWS = 50;
@@ -121,6 +124,7 @@ const App: React.FC = () => {
   const [merges, setMerges] = useState<Merge[]>(getInitialMerges());
   const [isAILoading, setIsAILoading] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   const updateCell = useCallback((row: number, col: number, value: string) => {
     // Safety check: ensure sheetData is valid before processing
@@ -408,11 +412,54 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canUndo, canRedo, undo, redo]);
 
+  // Auto-save version periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      versionHistory.autoSave(sheetData, merges);
+    }, 5 * 60 * 1000); // Every 5 minutes
+
+    return () => clearInterval(interval);
+  }, [sheetData, merges]);
+
+  // Version history handlers
+  const handleSaveVersion = useCallback(() => {
+    const description = prompt('Enter a description for this version (optional):');
+    versionHistory.createVersion(sheetData, merges, description || undefined, false);
+    alert('Version saved successfully!');
+  }, [sheetData, merges]);
+
+  const handleRestoreVersion = useCallback((version: any) => {
+    setSheetData(version.data);
+    setMerges(version.merges);
+  }, []);
+
+  const handleDeleteVersion = useCallback((id: string) => {
+    versionHistory.deleteVersion(id);
+  }, []);
+
+  const handleClearAllVersions = useCallback(() => {
+    versionHistory.clearAll();
+  }, []);
+
+  const handleImport = useCallback((data: SheetData, importedMerges: Merge[]) => {
+    setSheetData(data);
+    setMerges(importedMerges);
+  }, []);
+
   return (
     <div className="flex flex-col h-screen font-sans text-gray-800">
       {/* Sticky Header */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200 p-2 flex items-center justify-between shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-700">AI Spreadsheet</h1>
+        <div className="flex items-center space-x-4">
+          <h1 className="text-xl font-semibold text-gray-700">AI Spreadsheet</h1>
+          <FileMenu
+            sheetData={sheetData}
+            merges={merges}
+            onImport={handleImport}
+            onSaveVersion={handleSaveVersion}
+            onShowVersionHistory={() => setShowVersionHistory(true)}
+          />
+        </div>
         <div className="flex items-center space-x-4">
           {/* Zoom Control */}
           <div className="flex items-center space-x-2">
@@ -493,6 +540,16 @@ const App: React.FC = () => {
           error={aiError}
         />
       </main>
+
+      {/* Version History Modal */}
+      <VersionHistoryModal
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        versions={versionHistory.getVersions()}
+        onRestore={handleRestoreVersion}
+        onDelete={handleDeleteVersion}
+        onClearAll={handleClearAllVersions}
+      />
     </div>
   );
 };

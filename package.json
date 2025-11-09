@@ -13,7 +13,8 @@
     "hot-formula-parser": "^4.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "use-undo": "^1.1.1"
+    "use-undo": "^1.1.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
