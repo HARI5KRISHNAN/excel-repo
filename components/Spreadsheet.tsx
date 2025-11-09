@@ -2,7 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SheetData, SelectionArea, Merge } from '../types';
 import { Cell } from './Cell';
+import { LiveCursors } from './LiveCursors';
 import { isCellSelected, findMergeForCell } from '../utils';
+import { useCollaboration } from '../contexts/CollaborationContext';
 
 interface SpreadsheetProps {
   sheetData: SheetData;
@@ -24,6 +26,7 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
   const [editingCell, setEditingCell] = useState<SelectionArea['start'] | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
+  const collaboration = useCollaboration();
 
   // Validate sheetData but don't return early (breaks React hooks)
   const isValidData = Array.isArray(sheetData) && sheetData.length > 0;
@@ -36,6 +39,13 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
       console.error('SheetData is not an array:', sheetData);
     }
   }, [isValidData, sheetData]);
+
+  // Broadcast cursor position when selection changes
+  useEffect(() => {
+    if (collaboration.isConnected && !isSelecting) {
+      collaboration.updateCursor(selectionArea.start.row, selectionArea.start.col);
+    }
+  }, [selectionArea.start.row, selectionArea.start.col, collaboration, isSelecting]);
 
   const rows = isValidData ? sheetData.length : 0;
   const cols = isValidData && sheetData[0] ? sheetData[0].length : 0;
@@ -141,13 +151,19 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
     );
   }
 
+  const cellWidth = 100 * zoomScale;
+  const cellHeight = 24 * zoomScale;
+
   return (
-    <div ref={gridRef} className="p-4 bg-gray-100" tabIndex={0} onMouseLeave={() => setIsSelecting(false)}>
+    <div ref={gridRef} className="p-4 bg-gray-100 relative" tabIndex={0} onMouseLeave={() => setIsSelecting(false)}>
+      {/* Live Cursors Overlay */}
+      <LiveCursors cellWidth={cellWidth} cellHeight={cellHeight} />
+
       <div
         className="grid"
         style={{
-          gridTemplateColumns: `${40 * zoomScale}px repeat(${cols}, minmax(${100 * zoomScale}px, 1fr))`,
-          gridTemplateRows: `${24 * zoomScale}px repeat(${rows}, ${24 * zoomScale}px)`,
+          gridTemplateColumns: `${40 * zoomScale}px repeat(${cols}, minmax(${cellWidth}px, 1fr))`,
+          gridTemplateRows: `${24 * zoomScale}px repeat(${rows}, ${cellHeight}px)`,
           fontSize: `${12 * zoomScale}px`,
         }}
       >

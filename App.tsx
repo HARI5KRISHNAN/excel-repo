@@ -8,12 +8,17 @@ import { Toolbar } from './components/Toolbar';
 import { FileMenu } from './components/FileMenu';
 import { VersionHistoryModal } from './components/VersionHistoryModal';
 import { LoadSheetModal } from './components/LoadSheetModal';
+import { CommentPanel } from './components/CommentPanel';
+import { ShareSheetModal } from './components/ShareSheetModal';
+import { ChangeLogViewer } from './components/ChangeLogViewer';
+import { UserPresenceBar } from './components/UserPresenceBar';
 import { SheetData, SelectionArea, Merge, CellData, CellFormat } from './types';
 import { generateData } from './services/ollamaService';
 import { getNormalizedSelection, findMergeForCell, evaluateFormula } from './utils';
 import { useTheme } from './contexts/ThemeContext';
 import { versionHistory } from './services/versionHistory';
 import { useAuth } from './contexts/AuthContext';
+import { useCollaboration } from './contexts/CollaborationContext';
 import apiService from './services/apiService';
 
 
@@ -23,10 +28,16 @@ const INITIAL_COLS = 26; // A-Z
 const App: React.FC = () => {
   const { theme, toggleTheme, zoom, setZoom } = useTheme();
   const { user, logout } = useAuth();
+  const collaboration = useCollaboration();
   const [currentSheetId, setCurrentSheetId] = useState<number | null>(null);
   const [sheetName, setSheetName] = useState<string>('Untitled Spreadsheet');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+
+  // Collaboration UI state
+  const [showComments, setShowComments] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showChangeLog, setShowChangeLog] = useState(false);
 
   // Create a properly initialized empty sheet
   const createEmptySheet = (): SheetData => {
@@ -189,8 +200,14 @@ const App: React.FC = () => {
       };
     }
 
+    // Broadcast cell update to other users
+    const updatedCell = newData[row][col];
+    if (currentSheetId && collaboration.isConnected) {
+      collaboration.sendCellUpdate(row, col, updatedCell.value, updatedCell.formula);
+    }
+
     setSheetData(newData);
-  }, [sheetData]);
+  }, [sheetData, currentSheetId, collaboration]);
 
   const applyFormatToSelection = useCallback((format: Partial<CellFormat>) => {
     // Safety check: ensure sheetData is valid before processing
@@ -460,6 +477,37 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [sheetData, merges, currentSheetId, sheetName, user, isSyncing]);
 
+  // Collaboration: Join sheet when sheet ID changes
+  useEffect(() => {
+    if (currentSheetId && user) {
+      collaboration.joinSheet(currentSheetId);
+    }
+
+    return () => {
+      if (collaboration.isConnected) {
+        collaboration.leaveSheet();
+      }
+    };
+  }, [currentSheetId, user]);
+
+  // Collaboration: Handle incoming cell updates from other users
+  useEffect(() => {
+    collaboration.setOnCellUpdate((update) => {
+      // Update the cell with data from another user
+      const newData = sheetData.map(r => [...r]);
+
+      if (newData[update.row] && newData[update.row][update.col]) {
+        const currentCell = newData[update.row][update.col];
+        newData[update.row][update.col] = {
+          ...currentCell,
+          value: update.value,
+          formula: update.formula
+        };
+        setSheetData(newData);
+      }
+    });
+  }, [sheetData, collaboration]);
+
   // Version history handlers
   const handleSaveVersion = useCallback(() => {
     const description = prompt('Enter a description for this version (optional):');
@@ -517,6 +565,49 @@ const App: React.FC = () => {
               Last saved: {lastSyncTime.toLocaleTimeString()}
             </span>
           )}
+
+          {/* Collaboration Buttons */}
+          {currentSheetId && (
+            <div className="flex items-center space-x-2 border-r border-gray-300 dark:border-gray-600 pr-4">
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors flex items-center space-x-1"
+                title="Share sheet"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                <span>Share</span>
+              </button>
+              <button
+                onClick={() => setShowComments(!showComments)}
+                className={`px-3 py-1 text-sm rounded-md transition-colors flex items-center space-x-1 ${
+                  showComments
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+                title="Comments"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                </svg>
+                <span>Comments</span>
+              </button>
+              <button
+                onClick={() => setShowChangeLog(true)}
+                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md transition-colors flex items-center space-x-1"
+                title="Change history"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>History</span>
+              </button>
+            </div>
+          )}
+
+          {/* User Presence */}
+          <UserPresenceBar />
 
           {/* User Info */}
           {user && (
@@ -626,6 +717,35 @@ const App: React.FC = () => {
         onClose={() => setShowLoadSheet(false)}
         onLoad={handleLoadFromCloud}
       />
+
+      {/* Comment Panel */}
+      {currentSheetId && (
+        <CommentPanel
+          sheetId={currentSheetId}
+          isOpen={showComments}
+          onClose={() => setShowComments(false)}
+          selectedCell={selectionArea.start}
+        />
+      )}
+
+      {/* Share Sheet Modal */}
+      {currentSheetId && (
+        <ShareSheetModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          sheetId={currentSheetId}
+          sheetName={sheetName}
+        />
+      )}
+
+      {/* Change Log Viewer */}
+      {currentSheetId && (
+        <ChangeLogViewer
+          isOpen={showChangeLog}
+          onClose={() => setShowChangeLog(false)}
+          sheetId={currentSheetId}
+        />
+      )}
     </div>
   );
 };

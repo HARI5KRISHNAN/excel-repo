@@ -5,6 +5,7 @@ import App from './App';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthWrapper } from './components/AuthWrapper';
+import { CollaborationProvider } from './contexts/CollaborationContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -16,9 +17,11 @@ root.render(
   <React.StrictMode>
     <AuthProvider>
       <ThemeProvider>
-        <AuthWrapper>
-          <App />
-        </AuthWrapper>
+        <CollaborationProvider>
+          <AuthWrapper>
+            <App />
+          </AuthWrapper>
+        </CollaborationProvider>
       </ThemeProvider>
     </AuthProvider>
   </React.StrictMode>
