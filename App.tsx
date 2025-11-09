@@ -7,11 +7,14 @@ import { FormulaBar } from './components/FormulaBar';
 import { Toolbar } from './components/Toolbar';
 import { FileMenu } from './components/FileMenu';
 import { VersionHistoryModal } from './components/VersionHistoryModal';
+import { LoadSheetModal } from './components/LoadSheetModal';
 import { SheetData, SelectionArea, Merge, CellData, CellFormat } from './types';
 import { generateData } from './services/ollamaService';
 import { getNormalizedSelection, findMergeForCell, evaluateFormula } from './utils';
 import { useTheme } from './contexts/ThemeContext';
 import { versionHistory } from './services/versionHistory';
+import { useAuth } from './contexts/AuthContext';
+import apiService from './services/apiService';
 
 
 const INITIAL_ROWS = 50;
@@ -19,6 +22,11 @@ const INITIAL_COLS = 26; // A-Z
 
 const App: React.FC = () => {
   const { theme, toggleTheme, zoom, setZoom } = useTheme();
+  const { user, logout } = useAuth();
+  const [currentSheetId, setCurrentSheetId] = useState<number | null>(null);
+  const [sheetName, setSheetName] = useState<string>('Untitled Spreadsheet');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
   // Create a properly initialized empty sheet
   const createEmptySheet = (): SheetData => {
@@ -124,6 +132,7 @@ const App: React.FC = () => {
   const [merges, setMerges] = useState<Merge[]>(getInitialMerges());
   const [isAILoading, setIsAILoading] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [showLoadSheet, setShowLoadSheet] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   const updateCell = useCallback((row: number, col: number, value: string) => {
@@ -421,6 +430,36 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [sheetData, merges]);
 
+  // Auto-sync with backend every 30 seconds
+  useEffect(() => {
+    const syncToBackend = async () => {
+      if (!user || isSyncing) return;
+
+      try {
+        setIsSyncing(true);
+        if (currentSheetId) {
+          // Update existing sheet
+          await apiService.updateSheet(currentSheetId, sheetName, sheetData, merges);
+        } else {
+          // Create new sheet
+          const response = await apiService.saveSheet(sheetName, sheetData, merges);
+          setCurrentSheetId(response.id);
+        }
+        setLastSyncTime(new Date());
+      } catch (error) {
+        console.error('Auto-sync failed:', error);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+
+    const interval = setInterval(() => {
+      syncToBackend();
+    }, 30 * 1000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [sheetData, merges, currentSheetId, sheetName, user, isSyncing]);
+
   // Version history handlers
   const handleSaveVersion = useCallback(() => {
     const description = prompt('Enter a description for this version (optional):');
@@ -446,21 +485,51 @@ const App: React.FC = () => {
     setMerges(importedMerges);
   }, []);
 
+  const handleLoadFromCloud = useCallback((id: number, name: string, data: SheetData, importedMerges: Merge[]) => {
+    setCurrentSheetId(id);
+    setSheetName(name);
+    setSheetData(data);
+    setMerges(importedMerges);
+  }, []);
+
   return (
     <div className="flex flex-col h-screen font-sans text-gray-800">
       {/* Sticky Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200 p-2 flex items-center justify-between shadow-sm">
+      <header className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-2 flex items-center justify-between shadow-sm">
         <div className="flex items-center space-x-4">
-          <h1 className="text-xl font-semibold text-gray-700">AI Spreadsheet</h1>
+          <h1 className="text-xl font-semibold text-gray-700 dark:text-gray-200">AI Spreadsheet</h1>
           <FileMenu
             sheetData={sheetData}
             merges={merges}
             onImport={handleImport}
             onSaveVersion={handleSaveVersion}
             onShowVersionHistory={() => setShowVersionHistory(true)}
+            onShowLoadFromCloud={() => setShowLoadSheet(true)}
           />
         </div>
         <div className="flex items-center space-x-4">
+          {/* Sync Status */}
+          {isSyncing && (
+            <span className="text-sm text-blue-600 dark:text-blue-400">Syncing...</span>
+          )}
+          {lastSyncTime && !isSyncing && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Last saved: {lastSyncTime.toLocaleTimeString()}
+            </span>
+          )}
+
+          {/* User Info */}
+          {user && (
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600 dark:text-gray-400">{user.username}</span>
+              <button
+                onClick={logout}
+                className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          )}
           {/* Zoom Control */}
           <div className="flex items-center space-x-2">
             <label className="text-sm text-gray-600" htmlFor="zoom-slider">
@@ -549,6 +618,13 @@ const App: React.FC = () => {
         onRestore={handleRestoreVersion}
         onDelete={handleDeleteVersion}
         onClearAll={handleClearAllVersions}
+      />
+
+      {/* Load Sheet Modal */}
+      <LoadSheetModal
+        isOpen={showLoadSheet}
+        onClose={() => setShowLoadSheet(false)}
+        onLoad={handleLoadFromCloud}
       />
     </div>
   );
