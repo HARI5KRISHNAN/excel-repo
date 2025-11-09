@@ -18,10 +18,11 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+          'xlsx': path.resolve(__dirname, 'node_modules/xlsx/xlsx.mjs')
         }
       },
       optimizeDeps: {
-        exclude: ['xlsx']
+        exclude: []
       },
       build: {
         commonjsOptions: {
