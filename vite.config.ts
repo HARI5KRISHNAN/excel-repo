@@ -21,14 +21,20 @@ export default defineConfig(({ mode }) => {
         }
       },
       optimizeDeps: {
-        include: ['xlsx'],
-        esbuildOptions: {
-          target: 'esnext'
-        }
+        exclude: ['xlsx']
       },
       build: {
         commonjsOptions: {
-          include: [/xlsx/, /node_modules/]
+          include: [/node_modules/],
+          transformMixedEsModules: true
+        },
+        rollupOptions: {
+          external: [],
+          output: {
+            manualChunks: {
+              xlsx: ['xlsx']
+            }
+          }
         }
       }
     };
