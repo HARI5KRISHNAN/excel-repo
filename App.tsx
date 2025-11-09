@@ -120,100 +120,99 @@ const App: React.FC = () => {
   const [aiError, setAiError] = useState<string | null>(null);
 
   const updateCell = useCallback((row: number, col: number, value: string) => {
-    setSheetData(prevData => {
-      // Safety check: ensure prevData is valid before processing
-      if (!Array.isArray(prevData) || prevData.length === 0) {
-        console.warn('Invalid prevData in updateCell, using empty sheet');
-        return createEmptySheet();
-      }
+    // Safety check: ensure sheetData is valid before processing
+    if (!Array.isArray(sheetData) || sheetData.length === 0) {
+      console.warn('Invalid sheetData in updateCell, using empty sheet');
+      setSheetData(createEmptySheet());
+      return;
+    }
 
-      let newData = prevData.map(r => [...r]);
+    let newData = sheetData.map(r => [...r]);
 
-      // Dynamically expand grid if needed
-      // Add rows if necessary
-      while (newData.length <= row) {
-        newData.push(Array.from({ length: newData[0]?.length || INITIAL_COLS }, () => ({ value: '' })));
-      }
+    // Dynamically expand grid if needed
+    // Add rows if necessary
+    while (newData.length <= row) {
+      newData.push(Array.from({ length: newData[0]?.length || INITIAL_COLS }, () => ({ value: '' })));
+    }
 
-      // Add columns if necessary
-      if (newData[0] && newData[0].length <= col) {
-        const colsToAdd = col - newData[0].length + 1;
-        newData = newData.map(r => [
-          ...r,
-          ...Array.from({ length: colsToAdd }, () => ({ value: '' }))
-        ]);
-      }
+    // Add columns if necessary
+    if (newData[0] && newData[0].length <= col) {
+      const colsToAdd = col - newData[0].length + 1;
+      newData = newData.map(r => [
+        ...r,
+        ...Array.from({ length: colsToAdd }, () => ({ value: '' }))
+      ]);
+    }
 
-      const currentCell = newData[row]?.[col] || { value: '' };
+    const currentCell = newData[row]?.[col] || { value: '' };
 
-      // Check if the value is a formula
-      if (value.startsWith('=')) {
-        try {
-          // Evaluate the formula
-          const evaluatedValue = evaluateFormula(value, prevData);
-          newData[row][col] = {
-            ...currentCell,
-            value: evaluatedValue,
-            formula: value // Store the original formula
-          };
-        } catch (error) {
-          // If formula evaluation fails, show error
-          newData[row][col] = {
-            ...currentCell,
-            value: '#ERROR!',
-            formula: value
-          };
-        }
-      } else {
-        // Regular value - clear any existing formula
+    // Check if the value is a formula
+    if (value.startsWith('=')) {
+      try {
+        // Evaluate the formula
+        const evaluatedValue = evaluateFormula(value, sheetData);
         newData[row][col] = {
           ...currentCell,
-          value,
-          formula: undefined
+          value: evaluatedValue,
+          formula: value // Store the original formula
+        };
+      } catch (error) {
+        // If formula evaluation fails, show error
+        newData[row][col] = {
+          ...currentCell,
+          value: '#ERROR!',
+          formula: value
         };
       }
+    } else {
+      // Regular value - clear any existing formula
+      newData[row][col] = {
+        ...currentCell,
+        value,
+        formula: undefined
+      };
+    }
 
-      return newData;
-    });
-  }, []);
+    setSheetData(newData);
+  }, [sheetData]);
 
   const applyFormatToSelection = useCallback((format: Partial<CellFormat>) => {
-    setSheetData(prevData => {
-      // Safety check: ensure prevData is valid before processing
-      if (!Array.isArray(prevData) || prevData.length === 0) {
-        console.warn('Invalid prevData in applyFormatToSelection, using empty sheet');
-        return createEmptySheet();
-      }
+    // Safety check: ensure sheetData is valid before processing
+    if (!Array.isArray(sheetData) || sheetData.length === 0) {
+      console.warn('Invalid sheetData in applyFormatToSelection, using empty sheet');
+      setSheetData(createEmptySheet());
+      return;
+    }
 
-      let newData = prevData.map(r => [...r]);
-      const { minRow, maxRow, minCol, maxCol } = getNormalizedSelection(selectionArea);
+    let newData = sheetData.map(r => [...r]);
+    const { minRow, maxRow, minCol, maxCol } = getNormalizedSelection(selectionArea);
 
-      // Ensure grid is large enough for selection
-      while (newData.length <= maxRow) {
-        newData.push(Array.from({ length: newData[0]?.length || INITIAL_COLS }, () => ({ value: '' })));
-      }
+    // Ensure grid is large enough for selection
+    while (newData.length <= maxRow) {
+      newData.push(Array.from({ length: newData[0]?.length || INITIAL_COLS }, () => ({ value: '' })));
+    }
 
-      if (newData[0] && newData[0].length <= maxCol) {
-        const colsToAdd = maxCol - newData[0].length + 1;
-        newData = newData.map(r => [
-          ...r,
-          ...Array.from({ length: colsToAdd }, () => ({ value: '' }))
-        ]);
-      }
+    if (newData[0] && newData[0].length <= maxCol) {
+      const colsToAdd = maxCol - newData[0].length + 1;
+      newData = newData.map(r => [
+        ...r,
+        ...Array.from({ length: colsToAdd }, () => ({ value: '' }))
+      ]);
+    }
 
-      for (let r = minRow; r <= maxRow; r++) {
-        for (let c = minCol; c <= maxCol; c++) {
-          const currentCell = newData[r]?.[c] || { value: '' };
-          const existingFormat = currentCell.format || {};
-          newData[r][c] = {
-            ...currentCell,
-            format: { ...existingFormat, ...format },
-          };
-        }
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        const currentCell = newData[r]?.[c] || { value: '' };
+        const existingFormat = currentCell.format || {};
+        newData[r][c] = {
+          ...currentCell,
+          format: { ...existingFormat, ...format },
+        };
       }
-      return newData;
-    });
-  }, [selectionArea]);
+    }
+
+    setSheetData(newData);
+  }, [selectionArea, sheetData]);
   
   const handleMergeCells = useCallback(() => {
     const { minRow, maxRow, minCol, maxCol } = getNormalizedSelection(selectionArea);
@@ -233,41 +232,41 @@ const App: React.FC = () => {
 
     setMerges([...nonOverlappingMerges, newMerge]);
 
+    // Safety check: ensure sheetData is valid before processing
+    if (!Array.isArray(sheetData) || sheetData.length === 0) {
+      console.warn('Invalid sheetData in handleMergeCells, using empty sheet');
+      setSheetData(createEmptySheet());
+      return;
+    }
+
     // Preserve top-left cell object, clear others
     const cellToKeep = sheetData[minRow]?.[minCol] ?? { value: '' };
-    setSheetData(prevData => {
-      // Safety check: ensure prevData is valid before processing
-      if (!Array.isArray(prevData) || prevData.length === 0) {
-        console.warn('Invalid prevData in handleMergeCells, using empty sheet');
-        return createEmptySheet();
-      }
+    let newData = sheetData.map(r => [...r]);
 
-      let newData = prevData.map(r => [...r]);
+    // Ensure grid is large enough for merge
+    while (newData.length <= maxRow) {
+      newData.push(Array.from({ length: newData[0]?.length || INITIAL_COLS }, () => ({ value: '' })));
+    }
 
-      // Ensure grid is large enough for merge
-      while (newData.length <= maxRow) {
-        newData.push(Array.from({ length: newData[0]?.length || INITIAL_COLS }, () => ({ value: '' })));
-      }
+    if (newData[0] && newData[0].length <= maxCol) {
+      const colsToAdd = maxCol - newData[0].length + 1;
+      newData = newData.map(r => [
+        ...r,
+        ...Array.from({ length: colsToAdd }, () => ({ value: '' }))
+      ]);
+    }
 
-      if (newData[0] && newData[0].length <= maxCol) {
-        const colsToAdd = maxCol - newData[0].length + 1;
-        newData = newData.map(r => [
-          ...r,
-          ...Array.from({ length: colsToAdd }, () => ({ value: '' }))
-        ]);
-      }
-
-      for (let r = minRow; r <= maxRow; r++) {
-        for (let c = minCol; c <= maxCol; c++) {
-          if (r === minRow && c === minCol) {
-            newData[r][c] = cellToKeep;
-          } else {
-            newData[r][c] = { value: '', format: cellToKeep.format }; // Inherit format from merged cell
-          }
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        if (r === minRow && c === minCol) {
+          newData[r][c] = cellToKeep;
+        } else {
+          newData[r][c] = { value: '', format: cellToKeep.format }; // Inherit format from merged cell
         }
       }
-      return newData;
-    });
+    }
+
+    setSheetData(newData);
 
     // Reset selection to the new merged cell
     setSelectionArea({ start: { row: minRow, col: minCol }, end: { row: maxRow, col: maxCol } });
@@ -287,23 +286,21 @@ const App: React.FC = () => {
     try {
       const contextData = sheetData.slice(0, 20).map(row => row.slice(0, 10));
       const result = await generateData(prompt, contextData, selectionArea);
-      
+
       if (result && result.data) {
-        setSheetData(prevData => {
-          const newData = prevData.map(r => [...r]);
-          const { minRow, minCol } = getNormalizedSelection(selectionArea);
-          result.data.forEach((newRow, rowIndex) => {
-            newRow.forEach((cellValue, colIndex) => {
-              const targetRow = minRow + rowIndex;
-              const targetCol = minCol + colIndex;
-              if (targetRow < INITIAL_ROWS && targetCol < INITIAL_COLS) {
-                 const currentCell = newData[targetRow]?.[targetCol] || { value: '' };
-                 newData[targetRow][targetCol] = { ...currentCell, value: cellValue };
-              }
-            });
+        const newData = sheetData.map(r => [...r]);
+        const { minRow, minCol } = getNormalizedSelection(selectionArea);
+        result.data.forEach((newRow, rowIndex) => {
+          newRow.forEach((cellValue, colIndex) => {
+            const targetRow = minRow + rowIndex;
+            const targetCol = minCol + colIndex;
+            if (targetRow < INITIAL_ROWS && targetCol < INITIAL_COLS) {
+              const currentCell = newData[targetRow]?.[targetCol] || { value: '' };
+              newData[targetRow][targetCol] = { ...currentCell, value: cellValue };
+            }
           });
-          return newData;
         });
+        setSheetData(newData);
       }
     } catch (error) {
       console.error("AI Generation Error:", error);
