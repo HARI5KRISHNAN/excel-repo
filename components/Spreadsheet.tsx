@@ -10,6 +10,7 @@ interface SpreadsheetProps {
   setSelectionArea: (area: SelectionArea) => void;
   updateCell: (row: number, col: number, value: string) => void;
   merges: Merge[];
+  zoom?: number;
 }
 
 export const Spreadsheet: React.FC<SpreadsheetProps> = ({
@@ -18,6 +19,7 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
   setSelectionArea,
   updateCell,
   merges,
+  zoom = 100,
 }) => {
   const [editingCell, setEditingCell] = useState<SelectionArea['start'] | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -25,6 +27,9 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
 
   // Validate sheetData but don't return early (breaks React hooks)
   const isValidData = Array.isArray(sheetData) && sheetData.length > 0;
+
+  // Calculate zoom scale
+  const zoomScale = zoom / 100;
 
   useEffect(() => {
     if (!isValidData) {
@@ -102,6 +107,21 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
 
   const colHeaders = Array.from({ length: cols }, (_, i) => String.fromCharCode(65 + i));
 
+  // Helper to check if row/col should be highlighted
+  const isRowHighlighted = (rowIndex: number) => {
+    const { start, end } = selectionArea;
+    const minRow = Math.min(start.row, end.row);
+    const maxRow = Math.max(start.row, end.row);
+    return rowIndex >= minRow && rowIndex <= maxRow;
+  };
+
+  const isColHighlighted = (colIndex: number) => {
+    const { start, end } = selectionArea;
+    const minCol = Math.min(start.col, end.col);
+    const maxCol = Math.max(start.col, end.col);
+    return colIndex >= minCol && colIndex <= maxCol;
+  };
+
   // Show error state if data is invalid
   if (!isValidData) {
     return (
@@ -126,8 +146,9 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
       <div
         className="grid"
         style={{
-          gridTemplateColumns: `40px repeat(${cols}, minmax(100px, 1fr))`,
-          gridTemplateRows: `24px repeat(${rows}, 24px)`,
+          gridTemplateColumns: `${40 * zoomScale}px repeat(${cols}, minmax(${100 * zoomScale}px, 1fr))`,
+          gridTemplateRows: `${24 * zoomScale}px repeat(${rows}, ${24 * zoomScale}px)`,
+          fontSize: `${12 * zoomScale}px`,
         }}
       >
         {/* Corner cell */}
@@ -136,7 +157,9 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
         {colHeaders.map((header, colIndex) => (
           <div
             key={colIndex}
-            className="sticky top-0 bg-gray-200 text-center font-semibold text-xs flex items-center justify-center border-r border-b border-gray-300 z-20"
+            className={`sticky top-0 bg-gray-200 text-center font-semibold text-xs flex items-center justify-center border-r border-b border-gray-300 z-20 ${
+              isColHighlighted(colIndex) ? 'highlight-col' : ''
+            }`}
           >
             {header}
           </div>
@@ -144,7 +167,11 @@ export const Spreadsheet: React.FC<SpreadsheetProps> = ({
         {/* Row headers and cells */}
         {sheetData.map((row, rowIndex) => (
           <React.Fragment key={rowIndex}>
-            <div className="sticky left-0 bg-gray-200 text-center font-semibold text-xs flex items-center justify-center border-r border-b border-gray-300 z-20">
+            <div
+              className={`sticky left-0 bg-gray-200 text-center font-semibold text-xs flex items-center justify-center border-r border-b border-gray-300 z-20 ${
+                isRowHighlighted(rowIndex) ? 'highlight-row' : ''
+              }`}
+            >
               {rowIndex + 1}
             </div>
             {row.map((cellData, colIndex) => {

@@ -8,12 +8,15 @@ import { Toolbar } from './components/Toolbar';
 import { SheetData, SelectionArea, Merge, CellData, CellFormat } from './types';
 import { generateData } from './services/geminiService';
 import { getNormalizedSelection, findMergeForCell, evaluateFormula } from './utils';
+import { useTheme } from './contexts/ThemeContext';
 
 
 const INITIAL_ROWS = 50;
 const INITIAL_COLS = 26; // A-Z
 
 const App: React.FC = () => {
+  const { theme, toggleTheme, zoom, setZoom } = useTheme();
+
   // Create a properly initialized empty sheet
   const createEmptySheet = (): SheetData => {
     return Array.from({ length: INITIAL_ROWS }, () =>
@@ -375,27 +378,72 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen font-sans text-gray-800">
-      <header className="bg-white border-b border-gray-200 p-2 flex items-center shadow-sm">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-40 bg-white border-b border-gray-200 p-2 flex items-center justify-between shadow-sm">
         <h1 className="text-xl font-semibold text-gray-700">AI Spreadsheet</h1>
+        <div className="flex items-center space-x-4">
+          {/* Zoom Control */}
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-600" htmlFor="zoom-slider">
+              Zoom:
+            </label>
+            <input
+              id="zoom-slider"
+              type="range"
+              min="50"
+              max="200"
+              step="10"
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-24"
+            />
+            <span className="text-sm text-gray-600 w-12">{zoom}%</span>
+          </div>
+
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-md hover:bg-gray-200 transition-colors"
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          >
+            {theme === 'light' ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            )}
+          </button>
+        </div>
       </header>
-       <Toolbar
-        selectionArea={selectionArea}
-        merges={merges}
-        onMerge={handleMergeCells}
-        onUnmerge={handleUnmergeCells}
-        onApplyFormat={applyFormatToSelection}
-        primaryCellFormat={primarySelectedCell?.format}
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={canUndo}
-        canRedo={canRedo}
-      />
+
+      {/* Sticky Toolbar */}
+      <div className="sticky top-[49px] z-30 shadow-md">
+        <Toolbar
+          selectionArea={selectionArea}
+          merges={merges}
+          onMerge={handleMergeCells}
+          onUnmerge={handleUnmergeCells}
+          onApplyFormat={applyFormatToSelection}
+          primaryCellFormat={primarySelectedCell?.format}
+          onUndo={undo}
+          onRedo={redo}
+          canUndo={canUndo}
+          canRedo={canRedo}
+        />
+      </div>
+
+      {/* Formula Bar */}
       <FormulaBar
         selectionArea={selectionArea}
         value={primarySelectedCell?.value ?? ''}
         onValueChange={(value) => updateCell(selectionArea.start.row, selectionArea.start.col, value)}
         selectionCountText={selectionCountText}
       />
+
+      {/* Main Content */}
       <main className="flex-grow flex overflow-hidden">
         <div className="flex-grow overflow-auto">
           <Spreadsheet
@@ -404,6 +452,7 @@ const App: React.FC = () => {
             setSelectionArea={setSelectionArea}
             updateCell={updateCell}
             merges={merges}
+            zoom={zoom}
           />
         </div>
         <AIPanel
