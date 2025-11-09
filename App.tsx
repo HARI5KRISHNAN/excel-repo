@@ -6,7 +6,7 @@ import { AIPanel } from './components/AIPanel';
 import { FormulaBar } from './components/FormulaBar';
 import { Toolbar } from './components/Toolbar';
 import { SheetData, SelectionArea, Merge, CellData, CellFormat } from './types';
-import { generateData } from './services/geminiService';
+import { generateData } from './services/ollamaService';
 import { getNormalizedSelection, findMergeForCell, evaluateFormula } from './utils';
 import { useTheme } from './contexts/ThemeContext';
 
@@ -290,24 +290,56 @@ const App: React.FC = () => {
       const contextData = sheetData.slice(0, 20).map(row => row.slice(0, 10));
       const result = await generateData(prompt, contextData, selectionArea);
 
-      if (result && result.data) {
+      if (result && result.data && result.data.length > 0) {
         const newData = sheetData.map(r => [...r]);
         const { minRow, minCol } = getNormalizedSelection(selectionArea);
+
+        // Expand grid if needed for AI-generated data
+        const maxRow = minRow + result.data.length - 1;
+        const maxCol = minCol + Math.max(...result.data.map(row => row.length)) - 1;
+
+        // Add rows if necessary
+        while (newData.length <= maxRow) {
+          newData.push(Array.from({ length: newData[0]?.length || INITIAL_COLS }, () => ({ value: '' })));
+        }
+
+        // Add columns if necessary
+        if (newData[0] && newData[0].length <= maxCol) {
+          const colsToAdd = maxCol - newData[0].length + 1;
+          for (let i = 0; i < newData.length; i++) {
+            newData[i] = [
+              ...newData[i],
+              ...Array.from({ length: colsToAdd }, () => ({ value: '' }))
+            ];
+          }
+        }
+
+        // Insert AI-generated data
         result.data.forEach((newRow, rowIndex) => {
           newRow.forEach((cellValue, colIndex) => {
             const targetRow = minRow + rowIndex;
             const targetCol = minCol + colIndex;
-            if (targetRow < INITIAL_ROWS && targetCol < INITIAL_COLS) {
+            if (targetRow < newData.length && targetCol < newData[0].length) {
               const currentCell = newData[targetRow]?.[targetCol] || { value: '' };
               newData[targetRow][targetCol] = { ...currentCell, value: cellValue };
             }
           });
         });
+
         setSheetData(newData);
+
+        // Show info about data source
+        if (result.source === 'fallback') {
+          console.info('Data generated using fallback patterns (Ollama not available)');
+        } else {
+          console.info('Data generated using Ollama');
+        }
+      } else {
+        setAiError("AI generated empty or invalid data. Please try a different prompt.");
       }
     } catch (error) {
       console.error("AI Generation Error:", error);
-      setAiError("Failed to generate data. Please check the console for details.");
+      setAiError("Failed to generate data. Please check that Ollama is running or try a different prompt.");
     } finally {
       setIsAILoading(false);
     }
