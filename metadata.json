@@ -1,0 +1,5 @@
+{
+  "name": "AI Spreadsheet",
+  "description": "An intelligent spreadsheet application integrated with Gemini AI to help you generate, format, and analyze data with natural language commands.",
+  "requestFramePermissions": []
+}
